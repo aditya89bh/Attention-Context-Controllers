@@ -1,81 +1,79 @@
-"""Demo: A9 long-horizon planning & commitment controller.
+"""End-to-end demo for A9 — Long-Horizon Planning & Commitment Controller.
 
 Run from repo root:
   python3 A9_long_horizon_planning/demo/demo_planning.py
 
-This demo intentionally uses a deterministic, toy setup:
-- a root goal decomposed into subgoals (GoalTree)
-- deterministic candidate plan generation (beam search)
-- deterministic plan scoring (PlanSimulator)
-- commitment decay on repeated failures with abandonment
+This demo is deterministic and intentionally simple.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Allow running this script directly from the repo root.
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from A9_long_horizon_planning.a9.goal_tree import GoalTree
-from A9_long_horizon_planning.a9.planner import LongHorizonPlanner
-from A9_long_horizon_planning.a9.types import Goal, PlannerConfig
+from a9.types import Goal, PlannerConfig
+from a9.goal_tree import GoalTree
+from a9.planner import LongHorizonPlanner
 
 
 def main() -> None:
-    # ---- Goal decomposition ----
-    root = Goal(goal_id="g_root", description="Publish A9 Repo", tags=["writing"], priority=1.0)
-    tree = GoalTree(root)
+    # 1) Root goal
+    goal = Goal(
+        goal_id="publish_a9",
+        description="Publish A9 planning module",
+        priority=1.0,
+        tags=["writing"],
+    )
 
-    tree.add_subgoal("g_root", Goal(goal_id="g_code", description="Write Code Files"))
-    tree.add_subgoal("g_root", Goal(goal_id="g_demo", description="Add Demo"))
-    tree.add_subgoal("g_root", Goal(goal_id="g_push", description="Push to GitHub"))
+    # 2) Build GoalTree
+    tree = GoalTree(goal)
+    tree.add_subgoal(
+        "publish_a9",
+        Goal(goal_id="write_code", description="Write code files", priority=1.0),
+    )
+    tree.add_subgoal(
+        "publish_a9",
+        Goal(goal_id="add_demo", description="Add demo", priority=1.0),
+    )
+    tree.add_subgoal(
+        "publish_a9",
+        Goal(goal_id="push_repo", description="Push to GitHub", priority=1.0),
+    )
 
-    print("\nGoal tree:")
+    # 3) Print the goal tree
+    print("\nGOAL TREE")
     tree.print_tree()
 
-    print("\nOpen goals (leaves-first):")
-    for n in tree.get_open_goals():
-        print(f"- {n.goal.goal_id}: {n.goal.description}")
+    # 4) Initialize planner
+    planner = LongHorizonPlanner(PlannerConfig(max_plan_depth=4, beam_width=3))
 
-    # ---- Planning ----
-    config = PlannerConfig(max_plan_depth=4, beam_width=3)
-    planner = LongHorizonPlanner(config=config)
+    # 5) Generate candidate plans
+    plans = planner.generate_candidate_plans(goal)
 
-    candidates = planner.generate_candidate_plans(root)
-    best = planner.select_best_plan(candidates)
-    planner.commit(best)
+    # 6) Print all generated plans
+    print("\nCANDIDATE PLANS")
+    for p in plans:
+        actions = [s.action.name for s in p.steps]
+        print(f"- {p.plan_id}: {actions}")
 
-    print("\nSelected plan:")
-    for i, step in enumerate(best.steps):
-        print(f"  {i}. {step.action.name} (cost={step.action.cost}, risk={step.action.risk})")
+    # 7) Select best plan
+    best_plan = planner.select_best_plan(plans)
+    print("\nSELECTED PLAN")
+    print(f"Selected: {best_plan.plan_id}")
 
-    # ---- Commitment demo ----
-    # Simulate execution: fail twice, then succeed.
-    print("\nCommitment over steps (simulate failures):")
-    for attempt in range(6):
+    # 8) Commit plan
+    planner.commit(best_plan)
+
+    # 9) Deterministic execution loop (all steps succeed)
+    print("\nEXECUTION")
+    while True:
         step = planner.next_step()
         if step is None:
-            print("Plan finished or abandoned.")
             break
+        print(f"Executing {step.step_id}: {step.action.name}")
+        planner.tick_after_step(success=True)
+        planner.advance_step()
 
-        success = not (attempt in (1, 2))  # deterministic failures
-        print(
-            f"Attempt {attempt}: step={step.step_id}:{step.action.name} success={success} "
-            f"commitment={planner.active_plan.commitment_strength if planner.active_plan else None}"
-        )
-
-        planner.tick_after_step(success=success)
-        if planner.active_plan is None:
-            print("Plan abandoned due to low commitment → replanning would trigger here.")
-            break
-
-        # Advance only on success
-        if success:
-            planner.advance_step()
+    # 10) Print final status
+    print("\nFINAL STATUS")
+    print(best_plan.status)
 
 
 if __name__ == "__main__":
