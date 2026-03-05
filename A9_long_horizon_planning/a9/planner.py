@@ -1,79 +1,169 @@
-"""Baseline planner for toy long-horizon tasks.
+"""A9 deterministic long-horizon planner.
 
-Implements a simple uniform-cost search (Dijkstra) over a discrete state space.
+This module provides:
+- deterministic candidate plan generation (beam search)
+- deterministic plan selection using the PlanSimulator
+- commitment tracking with abandonment + replanning triggers
 
-Notes:
-- This is a baseline, not a production planner.
-- Works well for small deterministic environments.
+No randomness, no external calls.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import heapq
-from typing import Dict, Iterable, List, Optional, Tuple
+from dataclasses import replace
+from typing import Optional
 
-from .types import Action, Dynamics, State
+from .types import (
+    Action,
+    Goal,
+    Plan,
+    PlanStatus,
+    PlanStep,
+    PlannerConfig,
+)
+from .simulator import PlanSimulator
 
 
-@dataclass(frozen=True)
-class Plan:
-    actions: tuple[Action, ...]
-    cost: float
-    states: tuple[State, ...]
+class LongHorizonPlanner:
+    """Deterministic candidate plan generation + commitment controller."""
 
+    def __init__(self, config: PlannerConfig | None = None):
+        """Create the planner with a config and an internal deterministic simulator."""
+        self.config = config or PlannerConfig()
+        self.simulator = PlanSimulator()
+        self.active_plan: Plan | None = None
 
-@dataclass
-class Planner:
-    dynamics: Dynamics
-    max_expansions: int = 100_000
+    def generate_candidate_plans(self, goal: Goal) -> list[Plan]:
+        """Generate candidate plans deterministically using beam search.
 
-    def plan_to_goal(self, start: State, is_goal) -> Optional[Plan]:
-        """Uniform-cost search to any state satisfying is_goal(state)->bool."""
+        Behavior:
+        - pick an action library based on goal.tags
+        - beam search expands plans by appending actions in a fixed order
+        - keep top `beam_width` partial plans by simulated score
+        - return final beam (size <= beam_width)
+        """
 
-        # priority queue items: (cost, state)
-        pq: List[Tuple[float, State]] = [(0.0, start)]
-        best_cost: Dict[State, float] = {start: 0.0}
-        parent: Dict[State, Tuple[State, Action]] = {}
+        tags = set(t.lower() for t in goal.tags)
+        if "writing" in tags:
+            action_names = ["outline", "draft", "revise", "publish"]
+        else:
+            action_names = ["analyze", "plan", "execute", "verify"]
 
-        expansions = 0
-        while pq:
-            cost, s = heapq.heappop(pq)
-            if cost != best_cost.get(s, float("inf")):
-                continue
+        # fixed library: same cost/risk defaults (caller can adjust later)
+        library = [Action(name=n) for n in action_names]
 
-            if is_goal(s):
-                return self._reconstruct(start, s, parent, cost)
+        max_depth = int(self.config.max_plan_depth)
+        beam_width = int(self.config.beam_width)
 
-            expansions += 1
-            if expansions > self.max_expansions:
-                return None
+        # Beam holds partial step sequences (list[PlanStep])
+        beam: list[list[PlanStep]] = [[]]
 
-            for a in self.dynamics.actions(s):
-                ns, step_cost = self.dynamics.step(s, a)
-                ncost = cost + float(step_cost)
-                if ncost < best_cost.get(ns, float("inf")):
-                    best_cost[ns] = ncost
-                    parent[ns] = (s, a)
-                    heapq.heappush(pq, (ncost, ns))
+        for depth in range(max_depth):
+            expanded: list[list[PlanStep]] = []
+            for partial_steps in beam:
+                for a in library:
+                    steps = list(partial_steps)
+                    step_id = f"s{len(steps)}"
+                    steps.append(
+                        PlanStep(
+                            step_id=step_id,
+                            action=a,
+                            expected_outcome=f"Complete {a.name}",
+                        )
+                    )
+                    expanded.append(steps)
 
-        return None
+            # Score partial plans deterministically with the simulator
+            scored: list[tuple[float, list[PlanStep]]] = []
+            for steps in expanded:
+                plan = Plan(
+                    plan_id="_partial",
+                    goal_id=goal.goal_id,
+                    steps=steps,
+                    status=PlanStatus.DRAFT,
+                )
+                sim = self.simulator.simulate(plan)
+                scored.append((sim.score, steps))
 
-    def _reconstruct(
-        self,
-        start: State,
-        goal: State,
-        parent: Dict[State, Tuple[State, Action]],
-        cost: float,
-    ) -> Plan:
-        actions: List[Action] = []
-        states: List[State] = [goal]
-        s = goal
-        while s != start:
-            ps, a = parent[s]
-            actions.append(a)
-            states.append(ps)
-            s = ps
-        actions.reverse()
-        states.reverse()
-        return Plan(actions=tuple(actions), cost=cost, states=tuple(states))
+            # Keep top beam_width (highest score), deterministic tie-breaker by step names
+            scored.sort(key=lambda x: (x[0], [s.action.name for s in x[1]]), reverse=True)
+            beam = [steps for _, steps in scored[:beam_width]]
+
+        # Convert final beam into Plans with deterministic plan_ids
+        plans: list[Plan] = []
+        for i, steps in enumerate(beam):
+            plans.append(
+                Plan(
+                    plan_id=f"plan_{i}",
+                    goal_id=goal.goal_id,
+                    steps=list(steps),
+                    status=PlanStatus.DRAFT,
+                )
+            )
+        return plans
+
+    def select_best_plan(self, plans: list[Plan]) -> Plan:
+        """Select the plan with the highest simulated score.
+
+        Raises:
+            ValueError: if plans is empty.
+        """
+        if not plans:
+            raise ValueError("select_best_plan() received empty plans list")
+
+        best = None
+        best_score = None
+        for p in plans:
+            r = self.simulator.simulate(p)
+            if best is None or r.score > best_score:  # type: ignore[operator]
+                best = p
+                best_score = r.score
+        assert best is not None
+        return best
+
+    def commit(self, plan: Plan) -> Plan:
+        """Activate a plan and set commitment to maximum."""
+        plan.status = PlanStatus.ACTIVE
+        plan.commitment_strength = 1.0
+        self.active_plan = plan
+        return plan
+
+    def tick_after_step(self, success: bool) -> None:
+        """Update commitment after attempting one step.
+
+        - On failure, decay commitment.
+        - On success, recover a bit (capped at 1.0).
+        - If commitment falls below abandonment threshold, abandon the plan.
+        """
+        if self.active_plan is None:
+            return
+
+        decay = float(self.config.commitment_decay)
+        if not success:
+            self.active_plan.commitment_strength -= decay
+        else:
+            self.active_plan.commitment_strength = min(
+                1.0, self.active_plan.commitment_strength + (decay / 2.0)
+            )
+
+        if self.active_plan.commitment_strength < float(self.config.abandonment_threshold):
+            self.active_plan.status = PlanStatus.ABANDONED
+            self.active_plan = None
+
+    def next_step(self) -> PlanStep | None:
+        """Return the next step to execute without advancing the plan."""
+        if self.active_plan is None:
+            return None
+
+        if self.active_plan.current_step_index >= len(self.active_plan.steps):
+            self.active_plan.status = PlanStatus.COMPLETED
+            self.active_plan = None
+            return None
+
+        return self.active_plan.steps[self.active_plan.current_step_index]
+
+    def advance_step(self) -> None:
+        """Advance to the next step of the active plan (if any)."""
+        if self.active_plan is None:
+            return
+        self.active_plan.current_step_index += 1
