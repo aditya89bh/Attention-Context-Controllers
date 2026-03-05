@@ -1,58 +1,99 @@
-"""Shared types for planning + simulation.
+"""A9 planning layer — core data structures.
 
-Design goals:
-- Keep it tiny and readable.
-- Prefer Protocols over heavy base classes.
-- Allow deterministic toy sims for experiments.
+This module intentionally contains **only**:
+- dataclasses
+- enums
+
+No planning/search/simulation logic should live here.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Hashable, Iterable, Mapping, Protocol, Sequence, TypeVar
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 
-State = Hashable
-Action = Hashable
+class PlanStatus(str, Enum):
+    """Lifecycle status of a plan."""
+
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    ABANDONED = "ABANDONED"
+    COMPLETED = "COMPLETED"
 
 
 @dataclass(frozen=True)
-class Transition:
-    """A single step in a trajectory."""
+class Goal:
+    """A goal the agent wants to achieve.
 
-    state: State
-    action: Action
-    next_state: State
+    `priority` is a simple scalar used for ordering/selection.
+    `tags` allows light categorization (e.g., "robotics", "ops", "urgent").
+    """
+
+    goal_id: str
+    description: str
+    priority: float = 1.0
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Action:
+    """An atomic action used inside a plan.
+
+    `params` captures structured arguments.
+    `cost` and `risk` are scalar estimates used for scoring.
+    """
+
+    name: str
+    params: dict[str, Any] = field(default_factory=dict)
     cost: float = 1.0
+    risk: float = 0.0
 
 
-class Dynamics(Protocol):
-    """Environment dynamics for planning."""
+@dataclass(frozen=True)
+class PlanStep:
+    """A single step in a plan."""
 
-    def actions(self, state: State) -> Iterable[Action]:
-        ...
-
-    def step(self, state: State, action: Action) -> tuple[State, float]:
-        """Return (next_state, cost)."""
-        ...
+    step_id: str
+    action: Action
+    expected_outcome: str
 
 
-class GoalPredicate(Protocol):
-    def __call__(self, state: State) -> bool: ...
+@dataclass
+class Plan:
+    """A multi-step plan tied to a goal.
+
+    `current_step_index` points to the next step to execute.
+    `commitment_strength` controls persistence vs. abandoning/replanning.
+    """
+
+    plan_id: str
+    goal_id: str
+    steps: list[PlanStep]
+    status: PlanStatus
+    current_step_index: int = 0
+    commitment_strength: float = 1.0
 
 
-T = TypeVar("T")
+@dataclass(frozen=True)
+class SimResult:
+    """Result of simulating/scoring a plan."""
+
+    plan_id: str
+    score: float
+    total_cost: float
+    risk_score: float
+    success: bool
+    notes: dict[str, Any] = field(default_factory=dict)
 
 
-def argmin(items: Iterable[T], key: Callable[[T], float]) -> T:
-    """Return item with minimal key value."""
-    best = None
-    best_v = None
-    for x in items:
-        v = key(x)
-        if best is None or v < best_v:  # type: ignore[operator]
-            best = x
-            best_v = v
-    if best is None:
-        raise ValueError("argmin() received empty iterable")
-    return best
+@dataclass(frozen=True)
+class PlannerConfig:
+    """Configuration knobs for planning + commitment control."""
+
+    max_plan_depth: int = 5
+    beam_width: int = 3
+    commitment_decay: float = 0.1
+    abandonment_threshold: float = 0.3
