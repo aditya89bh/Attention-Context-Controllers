@@ -1,22 +1,37 @@
-"""A9: Long-horizon planning utilities.
+"""A9: Long-horizon planning & commitment controller.
 
-This module is intentionally lightweight and dependency-free.
+Public surface area:
+- core data structures (types)
+- goal decomposition tree (goal_tree)
+- deterministic plan simulator (simulator)
+- deterministic planner + commitment controller (planner)
 
-See `A9_long_horizon_planning/demo/demo_planning.py` for a runnable example.
+This package is dependency-free and designed for easy iteration.
 """
 
-from .types import Action, State, Transition
-from .goal_tree import Goal, GoalTree
-from .planner import Plan, Planner
-from .simulator import Simulator
+from .types import (
+    Action,
+    Goal,
+    Plan,
+    PlannerConfig,
+    PlanStatus,
+    PlanStep,
+    SimResult,
+)
+from .goal_tree import GoalNode, GoalTree
+from .simulator import PlanSimulator
+from .planner import LongHorizonPlanner
 
 __all__ = [
     "Action",
-    "State",
-    "Transition",
     "Goal",
-    "GoalTree",
     "Plan",
-    "Planner",
-    "Simulator",
+    "PlanStep",
+    "PlanStatus",
+    "PlannerConfig",
+    "SimResult",
+    "GoalNode",
+    "GoalTree",
+    "PlanSimulator",
+    "LongHorizonPlanner",
 ]
