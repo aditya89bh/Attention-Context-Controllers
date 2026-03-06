@@ -1,3 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+
+# A10 demo/test artifacts
+A10_identity_value_stabilization/demo/profile.json
+A10_identity_value_stabilization/tests/_tmp_profile.json
