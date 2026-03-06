@@ -2,31 +2,28 @@
 
 Public surface area:
 - data structures (types)
-- identity store (identity_store)
-- stabilizer rules (stabilizer)
-- evaluator/drift scoring (evaluator)
+- value evaluation (values)
+- value-aligned selection controller (controller)
 
 This package is deterministic and dependency-free.
 """
 
 from .types import (
-    AgentIdentity,
-    AgentValues,
-    PolicyConstraint,
-    DriftSignal,
-    EvaluationResult,
+    IdentityProfile,
+    ValueCategory,
+    ValueConfig,
+    ValueEvaluation,
+    ValueScore,
 )
-from .identity_store import IdentityStore
-from .stabilizer import Stabilizer
-from .evaluator import Evaluator
+from .values import ValueEvaluator
+from .controller import IdentityController
 
 __all__ = [
-    "AgentIdentity",
-    "AgentValues",
-    "PolicyConstraint",
-    "DriftSignal",
-    "EvaluationResult",
-    "IdentityStore",
-    "Stabilizer",
-    "Evaluator",
+    "IdentityProfile",
+    "ValueCategory",
+    "ValueConfig",
+    "ValueEvaluation",
+    "ValueScore",
+    "ValueEvaluator",
+    "IdentityController",
 ]
