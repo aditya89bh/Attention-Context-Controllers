@@ -4,7 +4,7 @@ _From memory systems to cognitive control_
 
 This repository is a research-practice lab for studying how AI agents decide what matters, what context to carry, what memory to retrieve, and when to stay focused or replan.
 
-It is built around ten cognitive control primitives, A1-A10. Each primitive is meant to be small, explainable, and testable through notes and deterministic mini demos.
+It is built around ten cognitive control primitives, A1-A10. Each primitive is small, explainable, and testable through notes and deterministic mini demos.
 
 This is not a production framework. The goal is to understand the control layer behind reliable long-horizon agents.
 
@@ -22,6 +22,30 @@ Values bias decisions.
 Self-monitoring corrects drift.
 
 The next step for agents is not just larger memory. It is better attention over memory.
+
+---
+
+## Quickstart
+
+Run the full A1-A10 cognitive control loop demo:
+
+```bash
+python examples/full_cognitive_control_loop.py
+```
+
+Run every individual demo:
+
+```bash
+python run_all_demos.py
+```
+
+Run smoke tests:
+
+```bash
+python -m pytest tests/test_smoke.py
+```
+
+No LLM API, GPU, or external service is required.
 
 ---
 
@@ -44,18 +68,18 @@ The focus is conceptual clarity plus runnable mini examples, not productization.
 
 ## A1-A10 Cognitive Control Stack
 
-| Layer | Controller | Purpose | Current Status |
+| Layer | Controller | Purpose | Status |
 |---|---|---|---|
-| A1 | Context Framing | Convert raw signals into a useful task frame | Planned |
-| A2 | Attention Budgeting | Allocate limited reasoning budget across competing concerns | Planned |
-| A3 | Salience Memory Access | Retrieve relevant memories and ignore noise | Planned |
-| A4 | Temporal Context | Separate past recall, present execution, and future simulation | Planned |
-| A5 | Interrupt / Task Switching | Decide when an interruption should override the current task | Planned |
-| A6 | Goal Arbitration | Choose between competing goals | Planned |
-| A7 | Constraint Enforcement | Block unsafe, inconsistent, or invalid actions | Partial |
-| A8 | Self-Monitoring | Detect drift, low confidence, and instability | Partial |
-| A9 | Long-Horizon Planning | Generate, commit to, abandon, and replan multi-step plans | Partial |
-| A10 | Identity & Value Stabilization | Bias decisions using stable values and identity | Partial |
+| A1 | Context Framing | Convert raw signals into a useful task frame | Demo complete |
+| A2 | Attention Budgeting | Allocate limited reasoning budget across competing concerns | Demo complete |
+| A3 | Salience Memory Access | Retrieve relevant memories and ignore noise | Demo complete |
+| A4 | Temporal Context | Separate past recall, present execution, and future simulation | Demo complete |
+| A5 | Interrupt / Task Switching | Decide when an interruption should override the current task | Demo complete |
+| A6 | Goal Arbitration | Choose between competing goals | Demo complete |
+| A7 | Constraint Enforcement | Block unsafe, inconsistent, or invalid actions | Demo complete |
+| A8 | Self-Monitoring | Detect drift, low confidence, and instability | Demo complete |
+| A9 | Long-Horizon Planning | Generate, commit to, abandon, and replan multi-step plans | Demo complete |
+| A10 | Identity & Value Stabilization | Bias decisions using stable values and identity | Demo complete |
 
 ---
 
@@ -91,6 +115,24 @@ A simple way to read the stack:
 
 ---
 
+## Demo Map
+
+| Demo | Command |
+|---|---|
+| A1 Context Framing | `python a1_context_framing/demo_context_framing.py` |
+| A2 Attention Budgeting | `python a2_attention_budgeting/demo_attention_budgeting.py` |
+| A3 Salience Memory Access | `python a3_salience_memory_access/demo_salience_memory_access.py` |
+| A4 Temporal Context | `python a4_temporal_context/demo_temporal_context.py` |
+| A5 Interrupt / Task Switching | `python a5_interrupt_task_switching/demo_interrupt_task_switching.py` |
+| A6 Goal Arbitration | `python a6_goal_arbitration/demo_goal_arbitration.py` |
+| A7 Constraint Enforcement | `python a7_constraint_enforcement/demo_constraint_enforcement.py` |
+| A8 Self-Monitoring | `python a8_self_monitoring/demo_self_monitoring.py` |
+| A9 Long-Horizon Planning | `python a9_long_horizon_planning/demo_long_horizon_planning.py` |
+| A10 Identity & Value Stabilization | `python a10_identity_value_stabilization/demo_identity_value_stabilization.py` |
+| Full A1-A10 loop | `python examples/full_cognitive_control_loop.py` |
+
+---
+
 ## What This Repository Is
 
 - A study lab for attention, context, salience, and cognitive control
@@ -108,37 +150,25 @@ A simple way to read the stack:
 - Not an LLM wrapper
 - Not a RAG tuning project
 - Not a UI project
-- Not a claim that all A1-A10 layers are complete
+- Not a claim that these are production-grade controllers
 
 ---
 
-## Planned Final Artifacts
+## Final Artifacts
 
-| Artifact | Purpose |
-|---|---|
-| A1-A10 controller notes | Explain each cognitive primitive clearly |
-| A1-A10 mini demos | Make each primitive executable |
-| Full cognitive control loop demo | Show the stack working in one robotics scenario |
-| Robotics use case | Connect the project to physical AI and RoboGPT |
-| Technical blog | Publish the final interpretation on Substack and Medium |
-
----
-
-## Quickstart
-
-Current quickstart will be finalized during the cleanup sprint.
-
-Target command:
-
-```bash
-python examples/full_cognitive_control_loop.py
-```
+| Artifact | Purpose | Status |
+|---|---|---|
+| A1-A10 controller notes | Explain each cognitive primitive clearly | Complete |
+| A1-A10 mini demos | Make each primitive executable | Complete |
+| Full cognitive control loop demo | Show the stack working in one robotics scenario | Complete |
+| Robotics use case | Connect the project to physical AI and RoboGPT | Planned |
+| Technical blog | Publish the final interpretation on Substack and Medium | Planned |
 
 ---
 
 ## Temporary Cleanup Tracker
 
-The current cleanup sprint is tracked in:
+The cleanup sprint is tracked in:
 
 ```text
 PROJECT_CLEANUP_CHECKLIST.md
@@ -174,11 +204,6 @@ Core argument:
 
 ## Status
 
-This repository is currently being polished into a complete research-practice artifact.
+This repository is portfolio-complete as a research-practice artifact once the demos and smoke tests are verified locally.
 
-Target completion:
-
-- 80-85% complete after the fast 3-day cleanup
-- 85-90% complete after the full 5-day cleanup
-
-Completion means portfolio-complete and learning-complete, not production-complete.
+Completion means learning-complete and portfolio-complete, not production-complete.
