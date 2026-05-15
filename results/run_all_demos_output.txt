@@ -1,0 +1,408 @@
+=== A1 Context Framing Demo ===
+
+Scenario:
+CNC robot failed pickup during loading.
+
+Raw Signals:
+- [task_state] Current task is CNC loading | urgency=5 risk=2
+- [robot_event] Failed pickup at tray | urgency=9 risk=7
+- [operator] Operator asks for status | urgency=6 risk=1
+- [memory_hint] Tray drift happened yesterday | urgency=7 risk=6
+- [sensor] Low force anomaly detected | urgency=5 risk=4
+
+Context Frame:
+Mode: recovery
+Task: CNC loading
+Summary: Recovery mode after failed pickup during CNC loading.
+Focus:
+- recover failed pickup
+- check tray pose drift
+- prepare operator status update
+
+Takeaway:
+Context framing turns raw signals into a useful reasoning frame.
+=== A2 Attention Budgeting Demo ===
+
+Context Frame:
+Recovery mode after failed pickup during CNC loading.
+
+Competing Concerns:
+- failure_recovery: relevance=10 urgency=9 risk=8
+- safety_check: relevance=8 urgency=8 risk=10
+- operator_communication: relevance=6 urgency=5 risk=2
+- background_logging: relevance=2 urgency=1 risk=1
+
+Attention Budget:
+- failure_recovery: 38
+- safety_check: 36
+- operator_communication: 20
+- background_logging: 6
+
+Takeaway:
+Attention is finite. The agent should not reason equally about everything.
+=== A3 Salience Memory Access Demo ===
+
+Context Frame:
+Recovery mode after failed pickup during CNC loading.
+
+Active Goal:
+recover failed pickup safely
+
+Memory Candidates:
+- m1: Tray drift happened yesterday during CNC loading.
+- m2: Previous pickup retry succeeded after applying a small tray offset.
+- m3: Operator prefers short status updates during recovery events.
+- m4: Weekly maintenance log mentioned cafeteria network outage.
+- m5: Old calibration note from six months ago.
+
+Selected Memories:
+- m1: score=9.30 | Tray drift happened yesterday during CNC loading.
+- m2: score=8.10 | Previous pickup retry succeeded after applying a small tray offset.
+
+Ignored Memories:
+- m3: score=4.80 | Operator prefers short status updates during recovery events.
+- m5: score=2.15 | Old calibration note from six months ago.
+- m4: score=1.80 | Weekly maintenance log mentioned cafeteria network outage.
+
+Takeaway:
+Memory becomes useful only when salience filters what matters for the current goal.
+=== A4 Temporal Context Demo ===
+
+Scenario:
+CNC robot failed pickup during loading. The agent must separate memory, current facts, and possible next actions.
+
+Raw Temporal Signals:
+- [past] memory: Tray drift happened yesterday during CNC loading.
+- [past] memory: Previous retry succeeded after applying a small tray offset.
+- [present] robot_state: Current pickup attempt failed at tray position.
+- [present] sensor: Low force anomaly is currently visible.
+- [future] simulation: Retry may succeed if tray offset is adjusted before next pickup.
+- [future] simulation: If force anomaly increases, pause and request operator inspection.
+
+Temporal Context:
+Past:
+- Tray drift happened yesterday during CNC loading.
+- Previous retry succeeded after applying a small tray offset.
+
+Present:
+- Current pickup attempt failed at tray position.
+- Low force anomaly is currently visible.
+
+Future:
+- Retry may succeed if tray offset is adjusted before next pickup.
+- If force anomaly increases, pause and request operator inspection.
+
+Takeaway:
+Temporal context prevents the agent from confusing memory, current state, and prediction.
+=== A5 Interrupt / Task Switching Demo ===
+
+Current Task:
+recover failed pickup during CNC loading
+Current Commitment Strength: 8
+
+Interrupt Decisions:
+
+Signal: operator_status_request
+Description: Operator asks what happened.
+Priority Score: 3.60
+Decision: stay_focused
+Reason: operator_status_request does not justify interrupting the active task.
+
+Signal: force_sensor_spike
+Description: Force sensor spike detected near gripper.
+Priority Score: 9.40
+Decision: switch_now
+Reason: force_sensor_spike has high risk/urgency relative to current commitment.
+
+Signal: background_log_update
+Description: Unrelated maintenance log update arrives.
+Priority Score: 1.00
+Decision: stay_focused
+Reason: background_log_update does not justify interrupting the active task.
+
+Takeaway:
+Interrupt control balances focus against urgent risk, so the agent is neither brittle nor distractible.
+=== A6 Goal Arbitration Demo ===
+
+Context Frame:
+Recovery mode after failed pickup during CNC loading.
+
+Attention Budget:
+- failure_recovery: 45
+- safety_check: 30
+- operator_communication: 20
+- background_logging: 5
+
+Candidate Goals:
+- g1: Continue normal CNC loading | score=3.85
+- g2: Recover failed pickup safely | score=9.30
+- g3: Answer operator status request | score=4.70
+- g4: Inspect force anomaly before retry | score=8.90
+
+Selected Active Goal:
+- g2: Recover failed pickup safely | score=9.30
+
+Deferred Goals:
+- g4: Inspect force anomaly before retry | score=8.90
+- g3: Answer operator status request | score=4.70
+- g1: Continue normal CNC loading | score=3.85
+
+Takeaway:
+Goal arbitration makes the agent choose one active goal instead of drifting between competing intentions.
+=== A7 Constraint Enforcement Demo ===
+
+Scenario:
+CNC robot is in recovery mode after failed pickup. A7 checks proposed actions before execution.
+
+World Facts:
+- human_approved: False
+- committed_goal: recover_failed_pickup_safely
+- allow_goal_change: False
+
+Active Commitments:
+- c1: Do not retry pickup at high speed during recovery mode. tags=['no_high_speed_retry']
+
+Validation Reports:
+
+Proposal: p1 | ACTION | {'action': 'retry_pickup', 'speed': 'reduced'}
+Allowed: True
+Penalties: {}
+- no_contradict_commitment:no_high_speed_retry: ok=True severity=HARD message=ok
+
+Proposal: p2 | ACTION | {'action': 'send_email'}
+Allowed: False
+Penalties: {'require_human_for_irreversible': 10.0, 'no_contradict_commitment:no_high_speed_retry': 10.0}
+- require_human_for_irreversible: ok=False severity=HARD message=Blocked: irreversible action requires world.facts['human_approved']=True.
+- no_contradict_commitment:no_high_speed_retry: ok=False severity=HARD message=Blocked: contradicts active commitment tag 'no_high_speed_retry'.
+
+Proposal: p3 | GOAL_SELECT | {'goal_id': 'continue_normal_loading'}
+Allowed: True
+Penalties: {'no_goal_drift': 2.0}
+- no_goal_drift: ok=False severity=SOFT message=Soft violation: attempted goal change without allow_goal_change=True.
+
+Takeaway:
+Constraint enforcement separates what the agent wants to do from what it is allowed to do.
+=== A8 Self-Monitoring Demo ===
+
+Scenario:
+The robot repeatedly retries pickup and repeatedly hits the same safety constraint.
+
+Behavior Events:
+- proposal_accepted: {'action': 'retry_pickup'}
+- proposal_accepted: {'action': 'retry_pickup'}
+- proposal_accepted: {'action': 'retry_pickup'}
+- proposal_accepted: {'action': 'retry_pickup'}
+- proposal_blocked: {'action': 'high_speed_retry'}
+- proposal_blocked: {'action': 'high_speed_retry'}
+- proposal_blocked: {'action': 'high_speed_retry'}
+
+Detected Issues:
+- LOOP | MEDIUM | Loop detected: action:retry_pickup repeated 4 times.
+- REPEATED_VIOLATION | MEDIUM | Repeated violation: require_safe_recovery_speed triggered 3 times.
+
+Suggested Interventions:
+- pause_and_replan: Loop detected on action:retry_pickup.
+- escalate_or_adjust: Repeatedly hitting require_safe_recovery_speed. Ask for approval or revise strategy.
+
+Report Notes:
+- window: 12
+- events_seen: 7
+
+Takeaway:
+Self-monitoring lets the agent notice when behavior is unstable instead of blindly continuing.
+=== A9 Long-Horizon Planning Demo ===
+
+Selected Goal:
+- recover_failed_pickup_safely: Recover failed pickup safely during CNC loading
+
+Candidate Plans:
+- plan_0: verify -> verify -> verify -> verify | score=16.00
+- plan_1: verify -> verify -> verify -> retry | score=16.00
+- plan_2: verify -> verify -> verify -> inspect | score=16.00
+
+Committed Plan:
+- plan_0
+- verify -> verify -> verify -> verify
+- commitment_strength=1.00
+
+Execution Trace:
+Step: verify | success=True
+Commitment after step: 1.00
+Step: verify | success=False
+Commitment after step: 0.75
+Step: verify | success=False
+Commitment after step: 0.50
+Step: verify | success=True
+Commitment after step: 0.62
+
+Takeaway:
+Long-horizon planning helps the agent commit to a sequence while still allowing abandonment when progress collapses.
+=== A10 Identity & Value Stabilization Demo ===
+
+Identity:
+Industrial robot that prioritizes safety, accuracy, and transparent recovery behavior.
+
+Value Weights:
+- SAFETY: 5.0
+- ACCURACY: 3.0
+- TRANSPARENCY: 2.0
+- EFFICIENCY: 1.0
+- RESOURCE_USE: 1.0
+
+Candidate Plans:
+
+Plan: fast_risky_retry
+Actions: retry -> verify
+Value Score: -33.00
+- SAFETY: -35.00 (raw=-7.000 * weight=5.000 * bias_strength=1.000)
+- EFFICIENCY: -2.00 (raw=-2.000 * weight=1.000 * bias_strength=1.000)
+- ACCURACY: 6.00 (raw=2.000 * weight=3.000 * bias_strength=1.000)
+- TRANSPARENCY: 0.00 (raw=0.000 * weight=2.000 * bias_strength=1.000)
+- RESOURCE_USE: -2.00 (raw=-2.000 * weight=1.000 * bias_strength=1.000)
+
+Plan: safer_recovery_plan
+Actions: plan -> inspect -> adjust -> retry -> verify
+Value Score: -25.00
+- SAFETY: -22.50 (raw=-4.500 * weight=5.000 * bias_strength=1.000)
+- EFFICIENCY: -5.00 (raw=-5.000 * weight=1.000 * bias_strength=1.000)
+- ACCURACY: 6.00 (raw=2.000 * weight=3.000 * bias_strength=1.000)
+- TRANSPARENCY: 2.00 (raw=1.000 * weight=2.000 * bias_strength=1.000)
+- RESOURCE_USE: -5.50 (raw=-5.500 * weight=1.000 * bias_strength=1.000)
+
+Selected Value-Aligned Plan:
+- safer_recovery_plan
+
+Takeaway:
+Identity and values make preferences stable, so the agent can choose safety over speed when it matters.
+FULL A1-A10 COGNITIVE CONTROL LOOP DEMO
+Scenario: CNC robot failed pickup during loading.
+
+========================================================================
+A1 — Context Framing
+========================================================================
+Mode: recovery
+Summary: Recovery mode after failed pickup during CNC loading.
+Focus:
+- recover failed pickup
+- check tray pose drift
+- keep operator informed
+
+========================================================================
+A2 — Attention Budgeting
+========================================================================
+- failure_recovery: 38
+- safety_check: 36
+- operator_communication: 20
+- background_logging: 6
+
+========================================================================
+A3 — Salience Memory Access
+========================================================================
+- m1: score=9.30 | Tray drift happened yesterday during CNC loading.
+- m2: score=8.10 | Previous pickup retry succeeded after applying small tray offset.
+
+========================================================================
+A4 — Temporal Context
+========================================================================
+Past:
+- Tray drift happened yesterday during CNC loading.
+- Previous retry succeeded after applying a small tray offset.
+Present:
+- Pickup attempt failed at current tray position.
+- Low force anomaly is visible but not yet critical.
+Future:
+- Retry may succeed after tray offset adjustment.
+- If force anomaly increases, pause and request operator inspection.
+
+========================================================================
+A5 — Interrupt / Task Switching
+========================================================================
+Interrupt: force_sensor_spike
+Decision: switch_now
+Priority Score: 9.40
+Reason: Safety-critical interrupt outranks current commitment.
+
+========================================================================
+A6 — Goal Arbitration
+========================================================================
+Selected Goal: g2 | Recover failed pickup safely | score=9.30
+
+========================================================================
+A7 — Constraint Enforcement
+========================================================================
+Proposal: {'action': 'retry_pickup', 'speed': 'reduced'}
+Allowed: True
+Penalties: {}
+
+========================================================================
+A8 — Self-Monitoring
+========================================================================
+Issue: LOOP | MEDIUM | Loop detected: action:retry_pickup repeated 5 times.
+Intervention: pause_and_replan | Loop detected on action:retry_pickup.
+
+========================================================================
+A9 — Long-Horizon Planning
+========================================================================
+Committed Plan: plan_0
+Steps: verify -> verify -> verify -> verify
+Commitment: 1.00
+
+========================================================================
+A10 — Identity & Value Stabilization
+========================================================================
+Identity: Industrial robot that prioritizes safety, accuracy, and transparent recovery behavior.
+Selected Value-Aligned Plan: plan_0
+Value Score: -2.00
+
+========================================================================
+Final Takeaway
+========================================================================
+Memory stores. Attention selects. Context frames. Planning sequences. Values bias action.
+The agent is not just remembering more. It is controlling what matters before acting.
+Running all Attention & Context Controller demos...
+
+================================================================================
+RUNNING: a1_context_framing/demo_context_framing.py
+================================================================================
+
+================================================================================
+RUNNING: a2_attention_budgeting/demo_attention_budgeting.py
+================================================================================
+
+================================================================================
+RUNNING: a3_salience_memory_access/demo_salience_memory_access.py
+================================================================================
+
+================================================================================
+RUNNING: a4_temporal_context/demo_temporal_context.py
+================================================================================
+
+================================================================================
+RUNNING: a5_interrupt_task_switching/demo_interrupt_task_switching.py
+================================================================================
+
+================================================================================
+RUNNING: a6_goal_arbitration/demo_goal_arbitration.py
+================================================================================
+
+================================================================================
+RUNNING: a7_constraint_enforcement/demo_constraint_enforcement.py
+================================================================================
+
+================================================================================
+RUNNING: a8_self_monitoring/demo_self_monitoring.py
+================================================================================
+
+================================================================================
+RUNNING: a9_long_horizon_planning/demo_long_horizon_planning.py
+================================================================================
+
+================================================================================
+RUNNING: a10_identity_value_stabilization/demo_identity_value_stabilization.py
+================================================================================
+
+================================================================================
+RUNNING: examples/full_cognitive_control_loop.py
+================================================================================
+
+All demos completed successfully.
