@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/apple/Attention-Context-Controllers
+configfile: pyproject.toml
+testpaths: tests
+collected 11 items
+
+tests/test_a1_to_a6.py ......                                            [ 54%]
+tests/test_full_loop.py .                                                [ 63%]
+tests/test_smoke.py ....                                                 [100%]
+
+============================== 11 passed in 0.02s ==============================
