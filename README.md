@@ -27,6 +27,14 @@ The next step for agents is not just larger memory. It is better attention over 
 
 ## Quickstart
 
+Create and activate a local Python environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install pytest
+```
+
 Run the full A1-A10 cognitive control loop demo:
 
 ```bash
@@ -39,13 +47,45 @@ Run every individual demo:
 python run_all_demos.py
 ```
 
-Run smoke tests:
+Run tests:
 
 ```bash
-python -m pytest tests/test_smoke.py
+python -m pytest
 ```
 
-No LLM API, GPU, or external service is required.
+Use the package API:
+
+```bash
+python examples/use_as_package.py
+```
+
+No LLM API, GPU, ROS, or external service is required.
+
+---
+
+## Verified Results
+
+The demos and smoke tests were run locally and output was captured.
+
+See:
+
+```text
+RESULTS.md
+results/run_all_demos_output.txt
+results/full_cognitive_control_loop_output.txt
+results/test_smoke_output.txt
+```
+
+Verification summary:
+
+| Check | Status |
+|---|---|
+| A1-A10 individual demos | Passed |
+| Full integrated demo | Passed |
+| Smoke tests | 4 passed locally |
+| Captured outputs | Present |
+| Package API example | Added |
+| CI workflow | Added |
 
 ---
 
@@ -115,6 +155,39 @@ A simple way to read the stack:
 
 ---
 
+## Package API
+
+The repository now exposes a minimal package API:
+
+```python
+from attention_context import CognitiveControlLoop, Signal, MemoryCandidate, GoalCandidate
+
+result = CognitiveControlLoop().run(
+    signals=signals,
+    memories=memories,
+    goals=goals,
+)
+```
+
+The returned result includes:
+
+```text
+context_frame
+attention_budget
+selected_memories
+temporal_context
+interrupt_decision
+active_goal
+constraint_report
+self_monitoring_report
+committed_plan
+value_aligned_plan
+```
+
+This API is intentionally minimal. It is meant for experimentation, not production use.
+
+---
+
 ## Demo Map
 
 | Demo | Command |
@@ -130,6 +203,7 @@ A simple way to read the stack:
 | A9 Long-Horizon Planning | `python a9_long_horizon_planning/demo_long_horizon_planning.py` |
 | A10 Identity & Value Stabilization | `python a10_identity_value_stabilization/demo_identity_value_stabilization.py` |
 | Full A1-A10 loop | `python examples/full_cognitive_control_loop.py` |
+| Package usage | `python examples/use_as_package.py` |
 
 ---
 
@@ -150,6 +224,7 @@ A simple way to read the stack:
 - Not an LLM wrapper
 - Not a RAG tuning project
 - Not a UI project
+- Not a ROS or real robot controller
 - Not a claim that these are production-grade controllers
 
 ---
@@ -161,20 +236,12 @@ A simple way to read the stack:
 | A1-A10 controller notes | Explain each cognitive primitive clearly | Complete |
 | A1-A10 mini demos | Make each primitive executable | Complete |
 | Full cognitive control loop demo | Show the stack working in one robotics scenario | Complete |
-| Robotics use case | Connect the project to physical AI and RoboGPT | Planned |
-| Technical blog | Publish the final interpretation on Substack and Medium | Planned |
-
----
-
-## Temporary Cleanup Tracker
-
-The cleanup sprint is tracked in:
-
-```text
-PROJECT_CLEANUP_CHECKLIST.md
-```
-
-This file is temporary and should be deleted once the project is complete.
+| Captured outputs | Provide evidence of runnable behavior | Complete |
+| Smoke tests | Verify key modules import and minimally work | Complete |
+| A1-A6 tests | Verify deterministic controller behavior | Added |
+| Full-loop test | Verify package-level output structure | Added |
+| Robotics use case | Connect the project to physical AI and RoboGPT | Complete |
+| Technical blog outline | Prepare final Substack/Medium interpretation | Complete |
 
 ---
 
@@ -202,8 +269,8 @@ Core argument:
 
 ---
 
-## Status
+## Current Status
 
-This repository is portfolio-complete as a research-practice artifact once the demos and smoke tests are verified locally.
+This repository is a verified research-practice prototype.
 
-Completion means learning-complete and portfolio-complete, not production-complete.
+It is suitable as a portfolio-grade cognitive-control research repo. It is not a production framework.
