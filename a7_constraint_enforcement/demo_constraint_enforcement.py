@@ -6,21 +6,13 @@ Run:
 This demo shows how proposed actions are checked before execution.
 It is intentionally self-contained so it runs reliably in local shells and CI.
 
-Note: this file avoids importing dataclasses because this folder contains a
-local types.py module, which can shadow Python's stdlib types module when the
-script is executed directly from this directory path.
+This file intentionally avoids all imports because this folder contains a local
+types.py file that can shadow Python's stdlib types module when executed as a
+script path.
 """
 
-from __future__ import annotations
 
-from typing import Any
-
-
-Proposal = dict[str, Any]
-ConstraintResult = dict[str, Any]
-
-
-def make_proposal(proposal_id: str, action: str, payload: dict[str, Any], tags: set[str]) -> Proposal:
+def make_proposal(proposal_id, action, payload, tags):
     return {
         "proposal_id": proposal_id,
         "action": action,
@@ -29,7 +21,7 @@ def make_proposal(proposal_id: str, action: str, payload: dict[str, Any], tags: 
     }
 
 
-def make_result(constraint_id: str, ok: bool, severity: str, message: str) -> ConstraintResult:
+def make_result(constraint_id, ok, severity, message):
     return {
         "constraint_id": constraint_id,
         "ok": ok,
@@ -38,10 +30,10 @@ def make_result(constraint_id: str, ok: bool, severity: str, message: str) -> Co
     }
 
 
-def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, list[ConstraintResult], dict[str, float]]:
+def validate_proposal(proposal, world):
     """Validate a proposal against simple deterministic constraints."""
-    results: list[ConstraintResult] = []
-    penalties: dict[str, float] = {}
+    results = []
+    penalties = {}
 
     if "irreversible" in proposal["tags"] and not world.get("human_approved", False):
         results.append(
@@ -81,7 +73,7 @@ def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, 
     return allowed, results, penalties
 
 
-def main() -> None:
+def main():
     world = {
         "mode": "recovery",
         "human_approved": False,
