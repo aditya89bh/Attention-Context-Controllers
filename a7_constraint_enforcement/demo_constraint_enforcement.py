@@ -5,28 +5,37 @@ Run:
 
 This demo shows how proposed actions are checked before execution.
 It is intentionally self-contained so it runs reliably in local shells and CI.
+
+Note: this file avoids importing dataclasses because this folder contains a
+local types.py module, which can shadow Python's stdlib types module when the
+script is executed directly from this directory path.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass(frozen=True)
-class Proposal:
-    proposal_id: str
-    action: str
-    payload: dict[str, Any]
-    tags: set[str]
+Proposal = dict[str, Any]
+ConstraintResult = dict[str, Any]
 
 
-@dataclass(frozen=True)
-class ConstraintResult:
-    constraint_id: str
-    ok: bool
-    severity: str
-    message: str
+def make_proposal(proposal_id: str, action: str, payload: dict[str, Any], tags: set[str]) -> Proposal:
+    return {
+        "proposal_id": proposal_id,
+        "action": action,
+        "payload": payload,
+        "tags": tags,
+    }
+
+
+def make_result(constraint_id: str, ok: bool, severity: str, message: str) -> ConstraintResult:
+    return {
+        "constraint_id": constraint_id,
+        "ok": ok,
+        "severity": severity,
+        "message": message,
+    }
 
 
 def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, list[ConstraintResult], dict[str, float]]:
@@ -34,9 +43,9 @@ def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, 
     results: list[ConstraintResult] = []
     penalties: dict[str, float] = {}
 
-    if "irreversible" in proposal.tags and not world.get("human_approved", False):
+    if "irreversible" in proposal["tags"] and not world.get("human_approved", False):
         results.append(
-            ConstraintResult(
+            make_result(
                 constraint_id="require_human_for_irreversible",
                 ok=False,
                 severity="HARD",
@@ -44,9 +53,9 @@ def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, 
             )
         )
 
-    if proposal.action == "retry_pickup" and proposal.payload.get("speed") == "high":
+    if proposal["action"] == "retry_pickup" and proposal["payload"].get("speed") == "high":
         results.append(
-            ConstraintResult(
+            make_result(
                 constraint_id="require_safe_recovery_speed",
                 ok=False,
                 severity="HARD",
@@ -54,9 +63,9 @@ def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, 
             )
         )
 
-    if proposal.action == "change_goal" and not world.get("allow_goal_change", False):
+    if proposal["action"] == "change_goal" and not world.get("allow_goal_change", False):
         results.append(
-            ConstraintResult(
+            make_result(
                 constraint_id="no_goal_drift",
                 ok=False,
                 severity="SOFT",
@@ -65,9 +74,9 @@ def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, 
         )
 
     for result in results:
-        penalties[result.constraint_id] = 10.0 if result.severity == "HARD" else 2.0
+        penalties[result["constraint_id"]] = 10.0 if result["severity"] == "HARD" else 2.0
 
-    has_hard_violation = any((not result.ok and result.severity == "HARD") for result in results)
+    has_hard_violation = any((not result["ok"] and result["severity"] == "HARD") for result in results)
     allowed = not has_hard_violation
     return allowed, results, penalties
 
@@ -81,10 +90,10 @@ def main() -> None:
     }
 
     proposals = [
-        Proposal("p1", "retry_pickup", {"speed": "reduced"}, set()),
-        Proposal("p2", "retry_pickup", {"speed": "high"}, set()),
-        Proposal("p3", "send_email", {"recipient": "operator"}, {"irreversible"}),
-        Proposal("p4", "change_goal", {"goal_id": "continue_normal_loading"}, set()),
+        make_proposal("p1", "retry_pickup", {"speed": "reduced"}, set()),
+        make_proposal("p2", "retry_pickup", {"speed": "high"}, set()),
+        make_proposal("p3", "send_email", {"recipient": "operator"}, {"irreversible"}),
+        make_proposal("p4", "change_goal", {"goal_id": "continue_normal_loading"}, set()),
     ]
 
     print("=== A7 Constraint Enforcement Demo ===")
@@ -98,13 +107,16 @@ def main() -> None:
     print("\nValidation Reports:")
     for proposal in proposals:
         allowed, results, penalties = validate_proposal(proposal, world)
-        print(f"\nProposal: {proposal.proposal_id} | action={proposal.action} | payload={proposal.payload}")
+        print(f"\nProposal: {proposal['proposal_id']} | action={proposal['action']} | payload={proposal['payload']}")
         print(f"Allowed: {allowed}")
         print(f"Penalties: {penalties}")
         if not results:
             print("- all_constraints: ok=True severity=NONE message=proposal passed checks")
         for result in results:
-            print(f"- {result.constraint_id}: ok={result.ok} severity={result.severity} message={result.message}")
+            print(
+                f"- {result['constraint_id']}: ok={result['ok']} "
+                f"severity={result['severity']} message={result['message']}"
+            )
 
     print("\nTakeaway:")
     print("Constraint enforcement separates what the agent wants to do from what it is allowed to do.")
