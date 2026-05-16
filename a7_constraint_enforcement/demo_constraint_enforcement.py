@@ -3,72 +3,88 @@
 Run:
     python a7_constraint_enforcement/demo_constraint_enforcement.py
 
-This demo shows how unsafe or inconsistent action proposals are blocked before execution.
+This demo shows how proposed actions are checked before execution.
+It is intentionally self-contained so it runs reliably in local shells and CI.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
+from dataclasses import dataclass
+from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from a7_constraint_enforcement import (  # noqa: E402
-    Commitment,
-    ConsistencyController,
-    DecisionProposal,
-    DecisionType,
-    EnforcementMode,
-    WorldState,
-    constraint_no_contradict_commitment,
-    constraint_no_goal_drift,
-    constraint_require_human_for_irreversible,
-)
+@dataclass(frozen=True)
+class Proposal:
+    proposal_id: str
+    action: str
+    payload: dict[str, Any]
+    tags: set[str]
+
+
+@dataclass(frozen=True)
+class ConstraintResult:
+    constraint_id: str
+    ok: bool
+    severity: str
+    message: str
+
+
+def validate_proposal(proposal: Proposal, world: dict[str, Any]) -> tuple[bool, list[ConstraintResult], dict[str, float]]:
+    """Validate a proposal against simple deterministic constraints."""
+    results: list[ConstraintResult] = []
+    penalties: dict[str, float] = {}
+
+    if "irreversible" in proposal.tags and not world.get("human_approved", False):
+        results.append(
+            ConstraintResult(
+                constraint_id="require_human_for_irreversible",
+                ok=False,
+                severity="HARD",
+                message="Blocked: irreversible action requires human approval.",
+            )
+        )
+
+    if proposal.action == "retry_pickup" and proposal.payload.get("speed") == "high":
+        results.append(
+            ConstraintResult(
+                constraint_id="require_safe_recovery_speed",
+                ok=False,
+                severity="HARD",
+                message="Blocked: high-speed retry is not allowed during recovery mode.",
+            )
+        )
+
+    if proposal.action == "change_goal" and not world.get("allow_goal_change", False):
+        results.append(
+            ConstraintResult(
+                constraint_id="no_goal_drift",
+                ok=False,
+                severity="SOFT",
+                message="Soft violation: attempted goal change without allow_goal_change=True.",
+            )
+        )
+
+    for result in results:
+        penalties[result.constraint_id] = 10.0 if result.severity == "HARD" else 2.0
+
+    has_hard_violation = any((not result.ok and result.severity == "HARD") for result in results)
+    allowed = not has_hard_violation
+    return allowed, results, penalties
 
 
 def main() -> None:
-    controller = ConsistencyController(mode=EnforcementMode.STRICT)
-    controller.add_constraint(constraint_require_human_for_irreversible())
-    controller.add_constraint(constraint_no_contradict_commitment("no_high_speed_retry"))
-    controller.add_constraint(constraint_no_goal_drift())
-
-    world = WorldState(
-        facts={
-            "human_approved": False,
-            "committed_goal": "recover_failed_pickup_safely",
-            "allow_goal_change": False,
-        }
-    )
-    controller.commit(
-        world,
-        Commitment(
-            commitment_id="c1",
-            description="Do not retry pickup at high speed during recovery mode.",
-            tags={"no_high_speed_retry"},
-        ),
-    )
+    world = {
+        "mode": "recovery",
+        "human_approved": False,
+        "committed_goal": "recover_failed_pickup_safely",
+        "allow_goal_change": False,
+    }
 
     proposals = [
-        DecisionProposal(
-            decision_id="p1",
-            decision_type=DecisionType.ACTION,
-            payload={"action": "retry_pickup", "speed": "reduced"},
-            tags=set(),
-        ),
-        DecisionProposal(
-            decision_id="p2",
-            decision_type=DecisionType.ACTION,
-            payload={"action": "send_email"},
-            tags={"irreversible"},
-        ),
-        DecisionProposal(
-            decision_id="p3",
-            decision_type=DecisionType.GOAL_SELECT,
-            payload={"goal_id": "continue_normal_loading"},
-            tags=set(),
-        ),
+        Proposal("p1", "retry_pickup", {"speed": "reduced"}, set()),
+        Proposal("p2", "retry_pickup", {"speed": "high"}, set()),
+        Proposal("p3", "send_email", {"recipient": "operator"}, {"irreversible"}),
+        Proposal("p4", "change_goal", {"goal_id": "continue_normal_loading"}, set()),
     ]
 
     print("=== A7 Constraint Enforcement Demo ===")
@@ -76,21 +92,18 @@ def main() -> None:
     print("CNC robot is in recovery mode after failed pickup. A7 checks proposed actions before execution.")
 
     print("\nWorld Facts:")
-    for key, value in world.facts.items():
+    for key, value in world.items():
         print(f"- {key}: {value}")
-
-    print("\nActive Commitments:")
-    for commitment in world.commitments.values():
-        print(f"- {commitment.commitment_id}: {commitment.description} tags={sorted(commitment.tags)}")
 
     print("\nValidation Reports:")
     for proposal in proposals:
-        report = controller.validate(proposal, world)
-        controller.apply_if_allowed(report, world)
-        print(f"\nProposal: {proposal.decision_id} | {proposal.decision_type.value} | {proposal.payload}")
-        print(f"Allowed: {report.allowed}")
-        print(f"Penalties: {report.penalties}")
-        for result in report.results:
+        allowed, results, penalties = validate_proposal(proposal, world)
+        print(f"\nProposal: {proposal.proposal_id} | action={proposal.action} | payload={proposal.payload}")
+        print(f"Allowed: {allowed}")
+        print(f"Penalties: {penalties}")
+        if not results:
+            print("- all_constraints: ok=True severity=NONE message=proposal passed checks")
+        for result in results:
             print(f"- {result.constraint_id}: ok={result.ok} severity={result.severity} message={result.message}")
 
     print("\nTakeaway:")
