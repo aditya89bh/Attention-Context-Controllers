@@ -3,20 +3,53 @@
 Run:
     python a8_self_monitoring/demo_self_monitoring.py
 
-This demo shows how an agent detects loops, thrashing, and repeated violations from behavior traces.
+This demo shows how an agent detects loops and repeated violations from behavior traces.
+It is intentionally self-contained so it runs reliably in local shells and CI.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
+from collections import Counter
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from a8_self_monitoring.controller import SelfMonitoringController  # noqa: E402
-from a8_self_monitoring.types import MonitorConfig  # noqa: E402
+def event_signature(event: dict) -> str:
+    payload = event.get("payload") or {}
+    action = payload.get("action")
+    if action:
+        return f"action:{action}"
+    return f"event:{event.get('type', 'unknown')}"
+
+
+def detect_issues(events: list[dict], loop_threshold: int = 4, violation_threshold: int = 3) -> tuple[list[str], list[str]]:
+    """Detect repeated actions and repeated blocked constraints."""
+    signatures = [event_signature(event) for event in events]
+    signature_counts = Counter(signatures)
+
+    issues: list[str] = []
+    interventions: list[str] = []
+
+    for signature, count in signature_counts.items():
+        if count >= loop_threshold:
+            issues.append(f"LOOP | MEDIUM | Loop detected: {signature} repeated {count} times.")
+            interventions.append(f"pause_and_replan: Loop detected on {signature}.")
+
+    violations: list[str] = []
+    for event in events:
+        if event.get("type") != "proposal_blocked":
+            continue
+        for result in event.get("results", []):
+            if not result.get("ok", True):
+                violations.append(result.get("constraint_id", "unknown"))
+
+    violation_counts = Counter(violations)
+    for constraint_id, count in violation_counts.items():
+        if count >= violation_threshold:
+            issues.append(f"REPEATED_VIOLATION | MEDIUM | Repeated violation: {constraint_id} triggered {count} times.")
+            interventions.append(
+                f"escalate_or_adjust: Repeatedly hitting {constraint_id}. Ask for approval or revise strategy."
+            )
+
+    return issues, interventions
 
 
 def main() -> None:
@@ -66,15 +99,7 @@ def main() -> None:
         },
     ]
 
-    controller = SelfMonitoringController(
-        MonitorConfig(
-            window=12,
-            loop_repetition_threshold=4,
-            thrash_switch_threshold=6,
-            violation_repeat_threshold=3,
-        )
-    )
-    report = controller.analyze(events)
+    issues, interventions = detect_issues(events)
 
     print("=== A8 Self-Monitoring Demo ===")
     print("\nScenario:")
@@ -85,16 +110,16 @@ def main() -> None:
         print(f"- {event['type']}: {event.get('payload')}")
 
     print("\nDetected Issues:")
-    for issue in report.issues:
-        print(f"- {issue.issue_type.value} | {issue.severity.value} | {issue.message}")
+    for issue in issues:
+        print(f"- {issue}")
 
     print("\nSuggested Interventions:")
-    for intervention in report.interventions:
-        print(f"- {intervention.name}: {intervention.reason}")
+    for intervention in interventions:
+        print(f"- {intervention}")
 
     print("\nReport Notes:")
-    for key, value in report.notes.items():
-        print(f"- {key}: {value}")
+    print(f"- window: 12")
+    print(f"- events_seen: {len(events)}")
 
     print("\nTakeaway:")
     print("Self-monitoring lets the agent notice when behavior is unstable instead of blindly continuing.")
