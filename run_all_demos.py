@@ -6,6 +6,7 @@ Run from repo root:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,9 @@ DEMOS = [
 def main() -> None:
     root = Path(__file__).resolve().parent
     failures: list[str] = []
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(root) if not existing_pythonpath else f"{root}{os.pathsep}{existing_pythonpath}"
 
     print("Running all Attention & Context Controller demos...\n")
 
@@ -36,9 +40,20 @@ def main() -> None:
         print("=" * 80)
         print(f"RUNNING: {demo}")
         print("=" * 80)
-        result = subprocess.run([sys.executable, str(root / demo)], cwd=root)
+        result = subprocess.run(
+            [sys.executable, str(root / demo)],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+        )
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
         if result.returncode != 0:
             failures.append(demo)
+            print(f"FAILED: {demo} exited with code {result.returncode}")
         print()
 
     if failures:
